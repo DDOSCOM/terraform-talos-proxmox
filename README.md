@@ -127,7 +127,7 @@ No modules.
 | <a name="input_proxmox_efi_pre_enrolled_keys"></a> [proxmox\_efi\_pre\_enrolled\_keys](#input\_proxmox\_efi\_pre\_enrolled\_keys) | Whether to enable pre-enrolled secure boot keys on EFI disk | `bool` | `false` | no |
 | <a name="input_proxmox_iso_datastore"></a> [proxmox\_iso\_datastore](#input\_proxmox\_iso\_datastore) | Proxmox datastore where the Talos qcow2 image is downloaded | `string` | `"local"` | no |
 | <a name="input_proxmox_machine_type"></a> [proxmox\_machine\_type](#input\_proxmox\_machine\_type) | Proxmox machine type for VMs | `string` | `"q35"` | no |
-| <a name="input_proxmox_vm_id_start"></a> [proxmox\_vm\_id\_start](#input\_proxmox\_vm\_id\_start) | First VM ID to assign in Proxmox; IDs are allocated sequentially from this value | `number` | `300` | no |
+| <a name="input_proxmox_vm_id_start"></a> [proxmox\_vm\_id\_start](#input\_proxmox\_vm\_id\_start) | First VM ID to assign in Proxmox; IDs are allocated sequentially from this value | `number` | `100` | no |
 | <a name="input_talos_arch"></a> [talos\_arch](#input\_talos\_arch) | Talos architecture | `string` | `"amd64"` | no |
 | <a name="input_talos_cluster_name"></a> [talos\_cluster\_name](#input\_talos\_cluster\_name) | Talos cluster name | `string` | n/a | yes |
 | <a name="input_talos_nameservers"></a> [talos\_nameservers](#input\_talos\_nameservers) | Optional list of DNS nameservers used when a node is configured with static IP | `list(string)` | `[]` | no |
@@ -155,5 +155,13 @@ No modules.
 From the repository root:
 
 ```bash
-~/go/bin/terraform-docs markdown table --output-file modules/talos-proxmox/README.md --output-mode inject modules/talos-proxmox
+terraform-docs markdown table --output-file README.md --output-mode inject .
 ```
+
+## Release policy
+
+- On each merge of a PR to `main`, GitHub Actions creates a new release automatically.
+- Version bump defaults to patch (`vX.Y.Z` -> `vX.Y.Z+1` patch part).
+- To control bump level, add one of these labels to the PR:
+  - `release:major` (or `semver:major`)
+  - `release:minor` (or `semver:minor`)
