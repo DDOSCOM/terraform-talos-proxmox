@@ -162,6 +162,7 @@ terraform-docs markdown table --output-file README.md --output-mode inject .
 
 - On each merge of a PR to `main`, GitHub Actions creates a new release automatically.
 - Version bump defaults to patch (`vX.Y.Z` -> `vX.Y.Z+1` patch part).
+- The workflow is idempotent for retries and reruns: if the merge commit already has a released tag, it exits without creating a newer version.
 - To control bump level, add one of these labels to the PR:
   - `release:major` (or `semver:major`)
   - `release:minor` (or `semver:minor`)
