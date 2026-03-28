@@ -65,6 +65,10 @@ module "talos" {
 - If `ip_mode = "dhcp"`, make sure QEMU guest agent is running so IPv4 can be discovered.
 - The default cluster endpoint is `https://<first-master-ip>:6443`; you can override it with `cluster_endpoint`.
 
+## License
+
+This project is licensed under the GNU Affero General Public License v3.0 (`AGPL-3.0`). See `LICENSE`.
+
 ## Technical reference (auto-generated)
 
 The sections below (`Requirements`, `Providers`, `Resources`, `Inputs`, `Outputs`) are generated with `terraform-docs`.
