@@ -5,6 +5,7 @@ This module provisions a Kubernetes cluster with Talos Linux on Proxmox.
 ## What it does
 
 - Creates VMs for `masters` and `workers` using `bpg/proxmox`.
+- Downloads the Talos image on every Proxmox node that will host at least one VM.
 - Enforces UEFI (`ovmf`), `q35` machine type, and system disk on `scsi0` with `virtio-scsi-pci`.
 - Configures first-boot networking via cloud-init (`dhcp` or static IP per node).
 - Generates and applies Talos machine config, bootstraps the first master, and retrieves `kubeconfig`.
@@ -61,9 +62,13 @@ module "talos" {
 ## Important notes
 
 - `talos_version` is required and is used for both image download and machine config generation.
+- `talos_version` accepts both `1.12.6` and `v1.12.6` (the module normalizes it internally).
+- `talos_schematic_id` must be a 64-character lowercase hexadecimal string.
+- If set, `cluster_endpoint` must use `https://`.
 - If `ip_mode = "static"`, you must set `ip`, `cidr`, and `gateway`.
 - If `ip_mode = "dhcp"`, make sure QEMU guest agent is running so IPv4 can be discovered.
 - The default cluster endpoint is `https://<first-master-ip>:6443`; you can override it with `cluster_endpoint`.
+- Talos machine config apply now waits for VM creation resources to avoid race conditions during first apply.
 
 ## Technical reference (auto-generated)
 

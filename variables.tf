@@ -6,11 +6,21 @@ variable "talos_cluster_name" {
 variable "talos_version" {
   description = "Talos OS version used for both image download and machine configuration generation"
   type        = string
+
+  validation {
+    condition     = can(regex("^v?[0-9]+\\.[0-9]+\\.[0-9]+([-.][0-9A-Za-z.-]+)?$", var.talos_version))
+    error_message = "talos_version must be a valid Talos version (for example: 1.12.6, v1.12.6, or 1.13.0-beta.1)."
+  }
 }
 
 variable "talos_schematic_id" {
   description = "Talos Factory schematic ID used to build the image URL"
   type        = string
+
+  validation {
+    condition     = can(regex("^[a-f0-9]{64}$", var.talos_schematic_id))
+    error_message = "talos_schematic_id must be a 64-character lowercase hexadecimal string."
+  }
 }
 
 variable "talos_arch" {
@@ -29,6 +39,11 @@ variable "cluster_endpoint" {
   description = "Optional Kubernetes API endpoint (for example, a load balancer URL). If null, the first master IP is used"
   type        = string
   default     = null
+
+  validation {
+    condition     = var.cluster_endpoint == null || can(regex("^https://[^\\s]+$", var.cluster_endpoint))
+    error_message = "cluster_endpoint must be a valid https URL when set."
+  }
 }
 
 variable "proxmox_iso_datastore" {
