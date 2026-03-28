@@ -70,6 +70,10 @@ module "talos" {
 - The default cluster endpoint is `https://<first-master-ip>:6443`; you can override it with `cluster_endpoint`.
 - Talos machine config apply now waits for VM creation resources to avoid race conditions during first apply.
 
+## License
+
+This project is licensed under the GNU Affero General Public License v3.0 (`AGPL-3.0`). See `LICENSE`.
+
 ## Technical reference (auto-generated)
 
 The sections below (`Requirements`, `Providers`, `Resources`, `Inputs`, `Outputs`) are generated with `terraform-docs`.
