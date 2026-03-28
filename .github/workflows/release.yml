@@ -1,0 +1,230 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  quality-gate:
+    name: Quality Gate
+    uses: ./.github/workflows/terraform-ci.yml
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: quality-gate
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect merged PR associated with commit
+        id: pr
+        uses: actions/github-script@v7
+        env:
+          SHA: ${{ github.sha }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const commitSha = process.env.SHA;
+
+            const pullRequests = await github.paginate(
+              github.rest.repos.listPullRequestsAssociatedWithCommit,
+              {
+                owner,
+                repo,
+                commit_sha: commitSha,
+              }
+            );
+
+            const mergedPr = pullRequests.find((pr) => pr.base.ref === "main" && pr.merged_at);
+
+            if (!mergedPr) {
+              core.info(`No merged PR associated with commit ${commitSha}.`);
+              core.setOutput("found", "false");
+              core.setOutput("bump", "patch");
+              return;
+            }
+
+            const labels = (mergedPr.labels || []).map((label) => {
+              const name = typeof label === "string" ? label : label.name;
+              return String(name || "").toLowerCase();
+            });
+
+            let bump = "patch";
+            if (labels.includes("release:major") || labels.includes("semver:major")) {
+              bump = "major";
+            } else if (labels.includes("release:minor") || labels.includes("semver:minor")) {
+              bump = "minor";
+            }
+
+            core.setOutput("found", "true");
+            core.setOutput("number", String(mergedPr.number));
+            core.setOutput("title", mergedPr.title || "");
+            core.setOutput("bump", bump);
+
+      - name: Skip non-PR pushes
+        if: steps.pr.outputs.found != 'true'
+        run: |
+          echo "Push to main without merged PR association. Skipping release creation."
+
+      - name: Collect semantic tags on commit
+        if: steps.pr.outputs.found == 'true'
+        id: commit_tags
+        run: |
+          set -euo pipefail
+          git fetch --force --tags
+          tags_csv="$(git tag --points-at HEAD -l 'v*' --sort=-version:refname | paste -sd ',' -)"
+          echo "tags_csv=${tags_csv}" >> "${GITHUB_OUTPUT}"
+
+      - name: Check if commit already has a release
+        if: steps.pr.outputs.found == 'true'
+        id: existing_release
+        uses: actions/github-script@v7
+        env:
+          TAGS_CSV: ${{ steps.commit_tags.outputs.tags_csv }}
+        with:
+          script: |
+            const tags = String(process.env.TAGS_CSV || "")
+              .split(",")
+              .map((tag) => tag.trim())
+              .filter(Boolean);
+
+            if (tags.length === 0) {
+              core.setOutput("already_released", "false");
+              return;
+            }
+
+            for (const tag of tags) {
+              try {
+                const response = await github.rest.repos.getReleaseByTag({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  tag,
+                });
+
+                core.info(`Commit already released as ${tag}: ${response.data.html_url}`);
+                core.setOutput("already_released", "true");
+                core.setOutput("tag", tag);
+                return;
+              } catch (error) {
+                if (error.status !== 404) {
+                  throw error;
+                }
+              }
+            }
+
+            core.setOutput("already_released", "false");
+
+      - name: Commit already released
+        if: steps.pr.outputs.found == 'true' && steps.existing_release.outputs.already_released == 'true'
+        run: |
+          echo "Commit ${{ github.sha }} already has release for tag ${{ steps.existing_release.outputs.tag }}. Nothing to do."
+
+      - name: Compute next semantic version tag
+        if: steps.pr.outputs.found == 'true' && steps.existing_release.outputs.already_released != 'true'
+        id: semver
+        run: |
+          set -euo pipefail
+
+          existing_tag="$(git tag --points-at HEAD -l 'v*' --sort=-version:refname | head -n 1)"
+          if [[ -n "${existing_tag}" ]]; then
+            echo "Found existing tag on commit: ${existing_tag}"
+            echo "latest_tag=${existing_tag}" >> "${GITHUB_OUTPUT}"
+            echo "new_tag=${existing_tag}" >> "${GITHUB_OUTPUT}"
+            echo "reused_existing_tag=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          latest_tag=""
+          while IFS= read -r candidate; do
+            if [[ "${candidate}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              latest_tag="${candidate}"
+              break
+            fi
+          done < <(git tag -l 'v*' --sort=-version:refname)
+
+          if [[ -z "${latest_tag}" ]]; then
+            latest_tag="v0.0.0"
+          fi
+
+          version="${latest_tag#v}"
+          IFS='.' read -r major minor patch <<< "${version}"
+
+          case "${{ steps.pr.outputs.bump }}" in
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            *)
+              patch=$((patch + 1))
+              ;;
+          esac
+
+          new_tag="v${major}.${minor}.${patch}"
+
+          if git rev-parse --verify "refs/tags/${new_tag}" >/dev/null 2>&1; then
+            echo "Tag ${new_tag} already exists."
+            exit 1
+          fi
+
+          echo "latest_tag=${latest_tag}" >> "${GITHUB_OUTPUT}"
+          echo "new_tag=${new_tag}" >> "${GITHUB_OUTPUT}"
+          echo "reused_existing_tag=false" >> "${GITHUB_OUTPUT}"
+
+      - name: Ensure release does not already exist
+        if: steps.pr.outputs.found == 'true' && steps.existing_release.outputs.already_released != 'true'
+        id: release_check
+        uses: actions/github-script@v7
+        env:
+          TAG: ${{ steps.semver.outputs.new_tag }}
+        with:
+          script: |
+            try {
+              const response = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: process.env.TAG,
+              });
+              core.info(
+                `Release for tag ${process.env.TAG} already exists: ${response.data.html_url}`,
+              );
+              core.setOutput("exists", "true");
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+              core.setOutput("exists", "false");
+            }
+
+      - name: Create release
+        if: steps.pr.outputs.found == 'true' && steps.existing_release.outputs.already_released != 'true' && steps.release_check.outputs.exists != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.semver.outputs.new_tag }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          prerelease: false
+
+      - name: Release already exists
+        if: steps.pr.outputs.found == 'true' && steps.existing_release.outputs.already_released != 'true' && steps.release_check.outputs.exists == 'true'
+        run: |
+          echo "Release already exists for tag ${{ steps.semver.outputs.new_tag }}. Nothing to do."
