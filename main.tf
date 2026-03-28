@@ -1,6 +1,6 @@
 locals {
-  masters_by_host = { for node in var.masters : node.host => node }
-  workers_by_host = { for node in var.workers : node.host => node }
+  masters_by_host          = { for node in var.masters : node.host => node }
+  workers_by_host          = { for node in var.workers : node.host => node }
   talos_version_normalized = trimprefix(var.talos_version, "v")
   proxmox_nodes_with_vms   = distinct(concat([for node in var.masters : node.proxmox_node], [for node in var.workers : node.proxmox_node]))
 
