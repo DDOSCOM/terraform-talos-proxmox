@@ -1,6 +1,8 @@
 locals {
-  masters_by_host = { for node in var.masters : node.host => node }
-  workers_by_host = { for node in var.workers : node.host => node }
+  masters_by_host          = { for node in var.masters : node.host => node }
+  workers_by_host          = { for node in var.workers : node.host => node }
+  talos_version_normalized = trimprefix(var.talos_version, "v")
+  proxmox_nodes_with_vms   = distinct(concat([for node in var.masters : node.proxmox_node], [for node in var.workers : node.proxmox_node]))
 
   all_hosts             = concat([for node in var.masters : node.host], [for node in var.workers : node.host])
   vm_ids_by_host        = zipmap(local.all_hosts, range(var.proxmox_vm_id_start, var.proxmox_vm_id_start + length(local.all_hosts)))
@@ -19,13 +21,15 @@ resource "terraform_data" "input_validation" {
 }
 
 resource "proxmox_virtual_environment_download_file" "talos_image" {
+  for_each = toset(local.proxmox_nodes_with_vms)
+
   depends_on = [terraform_data.input_validation]
 
   content_type = "iso"
   datastore_id = var.proxmox_iso_datastore
-  node_name    = var.masters[0].proxmox_node
-  file_name    = "${var.talos_cluster_name}-talos-${var.talos_schematic_id}-${var.talos_version}-${var.talos_arch}.img"
-  url          = "https://factory.talos.dev/image/${var.talos_schematic_id}/v${var.talos_version}/nocloud-${var.talos_arch}.qcow2"
+  node_name    = each.key
+  file_name    = "${var.talos_cluster_name}-talos-${var.talos_schematic_id}-${local.talos_version_normalized}-${var.talos_arch}.img"
+  url          = "https://factory.talos.dev/image/${var.talos_schematic_id}/v${local.talos_version_normalized}/nocloud-${var.talos_arch}.qcow2"
 }
 
 resource "proxmox_virtual_environment_vm" "master" {
@@ -60,7 +64,7 @@ resource "proxmox_virtual_environment_vm" "master" {
 
   disk {
     datastore_id = coalesce(try(each.value.datastore_id, null), var.proxmox_default_vm_datastore)
-    file_id      = proxmox_virtual_environment_download_file.talos_image.id
+    file_id      = proxmox_virtual_environment_download_file.talos_image[each.value.proxmox_node].id
     interface    = "scsi0"
     discard      = "on"
     size         = coalesce(try(each.value.disk_gb, null), var.master_default_disk_gb)
@@ -125,7 +129,7 @@ resource "proxmox_virtual_environment_vm" "worker" {
 
   disk {
     datastore_id = coalesce(try(each.value.datastore_id, null), var.proxmox_default_vm_datastore)
-    file_id      = proxmox_virtual_environment_download_file.talos_image.id
+    file_id      = proxmox_virtual_environment_download_file.talos_image[each.value.proxmox_node].id
     interface    = "scsi0"
     discard      = "on"
     size         = coalesce(try(each.value.disk_gb, null), var.worker_default_disk_gb)
@@ -308,7 +312,7 @@ data "talos_machine_configuration" "controlplane" {
   cluster_endpoint   = local.resolved_cluster_endpoint
   machine_type       = "controlplane"
   machine_secrets    = talos_machine_secrets.this.machine_secrets
-  talos_version      = var.talos_version
+  talos_version      = local.talos_version_normalized
   kubernetes_version = var.kubernetes_version
 }
 
@@ -317,12 +321,15 @@ data "talos_machine_configuration" "worker" {
   cluster_endpoint   = local.resolved_cluster_endpoint
   machine_type       = "worker"
   machine_secrets    = talos_machine_secrets.this.machine_secrets
-  talos_version      = var.talos_version
+  talos_version      = local.talos_version_normalized
   kubernetes_version = var.kubernetes_version
 }
 
 resource "talos_machine_configuration_apply" "master" {
   for_each = local.masters_by_host
+  depends_on = [
+    proxmox_virtual_environment_vm.master
+  ]
 
   client_configuration        = talos_machine_secrets.this.client_configuration
   machine_configuration_input = data.talos_machine_configuration.controlplane.machine_configuration
@@ -339,6 +346,9 @@ resource "talos_machine_configuration_apply" "master" {
 
 resource "talos_machine_configuration_apply" "worker" {
   for_each = local.workers_by_host
+  depends_on = [
+    proxmox_virtual_environment_vm.worker
+  ]
 
   client_configuration        = talos_machine_secrets.this.client_configuration
   machine_configuration_input = data.talos_machine_configuration.worker.machine_configuration
