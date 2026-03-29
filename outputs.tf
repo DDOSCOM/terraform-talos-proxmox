@@ -10,6 +10,11 @@ output "kubeconfig" {
   sensitive   = true
 }
 
+output "cluster_health_check_id" {
+  description = "Final Talos cluster health check ID (null when wait_for_control_plane_health is false)"
+  value       = try(data.talos_cluster_health.control_plane_ready[0].id, null)
+}
+
 output "master_ips" {
   description = "Map of master hostname to resolved IP"
   value       = local.master_node_ips

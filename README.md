@@ -202,6 +202,7 @@ No modules.
 | Name | Description |
 |------|-------------|
 | <a name="output_all_node_ips"></a> [all\_node\_ips](#output\_all\_node\_ips) | Ordered list of all node IPs (masters, workers, storage workers) |
+| <a name="output_cluster_health_check_id"></a> [cluster\_health\_check\_id](#output\_cluster\_health\_check\_id) | Final Talos cluster health check ID (null when wait\_for\_control\_plane\_health is false) |
 | <a name="output_control_plane_ips"></a> [control\_plane\_ips](#output\_control\_plane\_ips) | Ordered list of control-plane IPs |
 | <a name="output_kubeconfig"></a> [kubeconfig](#output\_kubeconfig) | Kubernetes kubeconfig |
 | <a name="output_master_ips"></a> [master\_ips](#output\_master\_ips) | Map of master hostname to resolved IP |
