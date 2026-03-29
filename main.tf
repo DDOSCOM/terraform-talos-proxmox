@@ -294,6 +294,7 @@ resource "proxmox_virtual_environment_vm" "storage_worker" {
   disk {
     datastore_id = local.storage_worker_effective_system_datastore[each.key]
     file_id      = proxmox_virtual_environment_download_file.talos_image[each.value.proxmox_node].id
+    file_format  = "raw"
     interface    = "scsi0"
     discard      = "on"
     size         = coalesce(try(each.value.disk_gb, null), var.storage_worker_default_system_disk_gb)
