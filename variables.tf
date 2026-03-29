@@ -47,7 +47,7 @@ variable "cluster_endpoint" {
 }
 
 variable "proxmox_iso_datastore" {
-  description = "Proxmox datastore where the Talos qcow2 image is downloaded"
+  description = "Proxmox datastore where the Talos disk image is downloaded"
   type        = string
   default     = "local"
 }
@@ -56,6 +56,12 @@ variable "proxmox_default_vm_datastore" {
   description = "Default Proxmox datastore for VM disks when a node does not define datastore_id"
   type        = string
   default     = "local-lvm"
+}
+
+variable "proxmox_iscsi_datastores" {
+  description = "Datastores that should be treated as iSCSI-compatible for storage_workers"
+  type        = set(string)
+  default     = []
 }
 
 variable "proxmox_default_bridge" {
@@ -89,9 +95,9 @@ variable "proxmox_efi_disk_type" {
 }
 
 variable "proxmox_efi_pre_enrolled_keys" {
-  description = "Whether to enable pre-enrolled secure boot keys on EFI disk"
+  description = "Whether to enable pre-enrolled secure boot keys on EFI disk (recommended for Talos secure boot images)"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "proxmox_vm_id_start" {
@@ -119,6 +125,12 @@ variable "master_default_disk_gb" {
 
 variable "worker_default_disk_gb" {
   description = "Default disk size (GB) for workers when a node does not define disk_gb"
+  type        = number
+  default     = 80
+}
+
+variable "storage_worker_default_system_disk_gb" {
+  description = "Default system disk size (GB) for storage workers when a node does not define disk_gb"
   type        = number
   default     = 80
 }
@@ -151,6 +163,12 @@ variable "worker_machine_config_patches" {
   description = "Additional YAML patches applied to all worker nodes"
   type        = list(string)
   default     = []
+}
+
+variable "wait_for_control_plane_health" {
+  description = "Whether to run final Talos cluster health checks after all machine configurations are applied"
+  type        = bool
+  default     = true
 }
 
 variable "masters" {
@@ -256,5 +274,69 @@ variable "workers" {
       )
     ])
     error_message = "If workers[*].ip_mode is 'static', you must set ip, cidr (1-32), and gateway."
+  }
+}
+
+variable "storage_workers" {
+  description = "Storage worker nodes definition"
+  type = list(object({
+    host         = string
+    proxmox_node = string
+
+    ip_mode = optional(string, "dhcp")
+    ip      = optional(string)
+    cidr    = optional(number)
+    gateway = optional(string)
+
+    ram_mb    = number
+    cpu_cores = number
+    cpu_type  = optional(string)
+
+    disk_gb                 = optional(number)
+    datastore_id            = optional(string)
+    system_datastore_id     = optional(string)
+    efi_datastore_id        = optional(string)
+    cloud_init_datastore_id = optional(string)
+    iscsi_disk_name         = optional(string)
+    iscsi_disk_gb           = optional(number)
+    pool_id                 = optional(string)
+    bridge                  = optional(string)
+    vlan_id                 = optional(number)
+    mac_address             = optional(string)
+
+    install_disk           = optional(string)
+    machine_config_patches = optional(list(string), [])
+  }))
+  default = []
+
+  validation {
+    condition     = length(distinct([for node in var.storage_workers : node.host])) == length(var.storage_workers)
+    error_message = "Storage worker host names must be unique."
+  }
+
+  validation {
+    condition     = alltrue([for node in var.storage_workers : contains(["dhcp", "static"], lower(coalesce(try(node.ip_mode, null), "dhcp")))])
+    error_message = "storage_workers[*].ip_mode must be either 'dhcp' or 'static'."
+  }
+
+  validation {
+    condition = alltrue([
+      for node in var.storage_workers :
+      lower(coalesce(try(node.ip_mode, null), "dhcp")) != "static" || (
+        try(trimspace(node.ip), "") != "" &&
+        try(node.cidr, 0) >= 1 &&
+        try(node.cidr, 0) <= 32 &&
+        try(trimspace(node.gateway), "") != ""
+      )
+    ])
+    error_message = "If storage_workers[*].ip_mode is 'static', you must set ip, cidr (1-32), and gateway."
+  }
+
+  validation {
+    condition = alltrue([
+      for node in var.storage_workers :
+      try(node.iscsi_disk_gb, null) == null || try(node.iscsi_disk_gb, 0) > 0
+    ])
+    error_message = "If set, storage_workers[*].iscsi_disk_gb must be greater than 0."
   }
 }
