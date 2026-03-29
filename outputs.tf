@@ -20,13 +20,18 @@ output "worker_ips" {
   value       = local.worker_node_ips
 }
 
+output "storage_worker_ips" {
+  description = "Map of storage worker hostname to resolved IP"
+  value       = local.storage_worker_node_ips
+}
+
 output "control_plane_ips" {
   description = "Ordered list of control-plane IPs"
   value       = local.control_plane_ips
 }
 
 output "all_node_ips" {
-  description = "Ordered list of all node IPs"
+  description = "Ordered list of all node IPs (masters, workers, storage workers)"
   value       = local.all_node_ips
 }
 
@@ -45,6 +50,13 @@ output "node_inventory" {
         role         = "worker"
         proxmox_node = node.proxmox_node
         ip           = local.worker_node_ips[node.host]
+      }
+    },
+    {
+      for node in var.storage_workers : node.host => {
+        role         = "storage_worker"
+        proxmox_node = node.proxmox_node
+        ip           = local.storage_worker_node_ips[node.host]
       }
     }
   )
