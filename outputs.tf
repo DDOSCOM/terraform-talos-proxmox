@@ -66,3 +66,18 @@ output "node_inventory" {
     }
   )
 }
+
+output "metallb_namespace" {
+  description = "Namespace where MetalLB is installed"
+  value       = var.enable_metallb ? var.metallb_namespace : null
+}
+
+output "metallb_ip_ranges" {
+  description = "Configured MetalLB IP ranges"
+  value       = var.enable_metallb ? var.metallb_ip_ranges : []
+}
+
+output "metallb_enabled" {
+  description = "Whether MetalLB is enabled"
+  value       = var.enable_metallb
+}
