@@ -171,6 +171,73 @@ variable "wait_for_control_plane_health" {
   default     = true
 }
 
+variable "enable_metallb" {
+  description = "Whether to install and configure MetalLB"
+  type        = bool
+  default     = true
+}
+
+variable "metallb_ip_ranges" {
+  description = "MetalLB load balancer address ranges (CIDR or start-end range), for example [\"192.168.1.240-192.168.1.250\"]"
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = var.enable_metallb ? length(var.metallb_ip_ranges) > 0 : true
+    error_message = "When enable_metallb is true, metallb_ip_ranges must contain at least one CIDR or start-end range."
+  }
+
+  validation {
+    condition = var.enable_metallb ? alltrue([
+      for entry in var.metallb_ip_ranges : (
+        can(cidrnetmask(trimspace(entry))) || (
+          can(regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}-([0-9]{1,3}\\.){3}[0-9]{1,3}$", trimspace(entry))) &&
+          can(cidrhost("${split("-", trimspace(entry))[0]}/32", 0)) &&
+          can(cidrhost("${split("-", trimspace(entry))[1]}/32", 0)) &&
+          (
+            (
+              tonumber(split(".", split("-", trimspace(entry))[0])[0]) * 16777216 +
+              tonumber(split(".", split("-", trimspace(entry))[0])[1]) * 65536 +
+              tonumber(split(".", split("-", trimspace(entry))[0])[2]) * 256 +
+              tonumber(split(".", split("-", trimspace(entry))[0])[3])
+              ) <= (
+              tonumber(split(".", split("-", trimspace(entry))[1])[0]) * 16777216 +
+              tonumber(split(".", split("-", trimspace(entry))[1])[1]) * 65536 +
+              tonumber(split(".", split("-", trimspace(entry))[1])[2]) * 256 +
+              tonumber(split(".", split("-", trimspace(entry))[1])[3])
+            )
+          )
+        )
+      )
+    ]) : true
+    error_message = "When enable_metallb is true, each metallb_ip_ranges entry must be a valid IPv4 CIDR (0-32 prefix) or a valid IPv4 range with start <= end."
+  }
+}
+
+variable "metallb_namespace" {
+  description = "Kubernetes namespace for MetalLB"
+  type        = string
+  default     = "metallb-system"
+}
+
+variable "metallb_release_name" {
+  description = "Helm release name for MetalLB"
+  type        = string
+  default     = "metallb"
+}
+
+variable "metallb_ipaddresspool_name" {
+  description = "Name of the MetalLB IPAddressPool resource"
+  type        = string
+  default     = "default-pool"
+}
+
+variable "metallb_l2advertisement_name" {
+  description = "Name of the MetalLB L2Advertisement resource"
+  type        = string
+  default     = "default-l2advertisement"
+}
+
 variable "masters" {
   description = "Master nodes definition"
   type = list(object({

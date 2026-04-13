@@ -552,6 +552,16 @@ locals {
       try(node.machine_config_patches, [])
     )
   }
+
+  kubeconfig_decoded = try(yamldecode(talos_cluster_kubeconfig.this.kubeconfig_raw), null)
+
+  kubernetes_host = try(local.kubeconfig_decoded.clusters[0].cluster.server, null)
+
+  kubernetes_cluster_ca_certificate = try(base64decode(local.kubeconfig_decoded.clusters[0].cluster["certificate-authority-data"]), null)
+
+  kubernetes_client_certificate = try(base64decode(local.kubeconfig_decoded.users[0].user["client-certificate-data"]), null)
+
+  kubernetes_client_key = try(base64decode(local.kubeconfig_decoded.users[0].user["client-key-data"]), null)
 }
 
 resource "talos_machine_secrets" "this" {}
@@ -572,6 +582,15 @@ data "talos_machine_configuration" "worker" {
   machine_secrets    = talos_machine_secrets.this.machine_secrets
   talos_version      = local.talos_version_normalized
   kubernetes_version = var.kubernetes_version
+}
+
+provider "helm" {
+  kubernetes {
+    host                   = local.kubernetes_host
+    cluster_ca_certificate = local.kubernetes_cluster_ca_certificate
+    client_certificate     = local.kubernetes_client_certificate
+    client_key             = local.kubernetes_client_key
+  }
 }
 
 resource "talos_machine_configuration_apply" "master" {
@@ -680,4 +699,73 @@ data "talos_client_configuration" "this" {
   client_configuration = talos_machine_secrets.this.client_configuration
   endpoints            = local.control_plane_ips
   nodes                = local.all_node_ips
+}
+
+resource "helm_release" "metallb_namespace" {
+  count = var.enable_metallb ? 1 : 0
+
+  depends_on = [
+    talos_cluster_kubeconfig.this,
+    talos_machine_configuration_apply.master,
+    talos_machine_configuration_apply.worker,
+    talos_machine_configuration_apply.storage_worker,
+    data.talos_cluster_health.control_plane_ready,
+  ]
+
+  name             = "${var.metallb_release_name}-namespace"
+  chart            = "${path.module}/charts/metallb-namespace"
+  namespace        = "default"
+  create_namespace = false
+  wait             = true
+  timeout          = 300
+
+  values = [yamlencode({
+    namespace = var.metallb_namespace
+    labels = {
+      "pod-security.kubernetes.io/enforce" = "privileged"
+      "pod-security.kubernetes.io/audit"   = "privileged"
+      "pod-security.kubernetes.io/warn"    = "privileged"
+    }
+  })]
+}
+
+resource "helm_release" "metallb" {
+  count = var.enable_metallb ? 1 : 0
+
+  depends_on = [
+    helm_release.metallb_namespace,
+    talos_cluster_kubeconfig.this,
+    talos_machine_configuration_apply.master,
+    talos_machine_configuration_apply.worker,
+    talos_machine_configuration_apply.storage_worker,
+    data.talos_cluster_health.control_plane_ready,
+  ]
+
+  name             = var.metallb_release_name
+  repository       = "https://metallb.github.io/metallb"
+  chart            = "metallb"
+  namespace        = var.metallb_namespace
+  create_namespace = false
+  version          = "0.15.3"
+  wait             = true
+  timeout          = 600
+}
+
+resource "helm_release" "metallb_config" {
+  count = var.enable_metallb ? 1 : 0
+
+  depends_on = [helm_release.metallb]
+
+  name             = "${var.metallb_release_name}-config"
+  chart            = "${path.module}/charts/metallb-config"
+  namespace        = var.metallb_namespace
+  create_namespace = false
+  wait             = true
+  timeout          = 300
+
+  values = [yamlencode({
+    ipAddressPoolName   = var.metallb_ipaddresspool_name
+    l2AdvertisementName = var.metallb_l2advertisement_name
+    addresses           = var.metallb_ip_ranges
+  })]
 }

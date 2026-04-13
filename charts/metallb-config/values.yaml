@@ -1,0 +1,3 @@
+ipAddressPoolName: default-pool
+l2AdvertisementName: default-l2advertisement
+addresses: []

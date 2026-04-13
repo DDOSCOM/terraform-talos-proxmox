@@ -9,6 +9,8 @@ This module provisions a Kubernetes cluster with Talos Linux on Proxmox.
 - Enforces UEFI (`ovmf`), `q35` machine type, and system disk on `scsi0` with `virtio-scsi-pci`.
 - Configures first-boot networking via cloud-init (`dhcp` or static IP per node).
 - Generates and applies Talos machine config, bootstraps the first master, and retrieves `kubeconfig`.
+- Installs MetalLB via Helm and applies `IPAddressPool` + `L2Advertisement` through a dedicated Helm config release.
+- Ensures `metallb-system` namespace (or custom `metallb_namespace`) has Pod Security labels set to `privileged` for `enforce`, `audit`, and `warn`.
 - Assigns deterministic `vm_id` values starting from `proxmox_vm_id_start` (default `100`).
 - VM ID allocation order is `masters`, then `storage_workers`, then `workers`.
 
@@ -21,6 +23,8 @@ module "talos" {
   talos_cluster_name = "prod-cluster"
   talos_version      = "1.12.6"
   talos_schematic_id = "ce4c980550dd2ab1b17bbf2b08801c7eb59418eafe8f279833297925d67c7515"
+  enable_metallb        = true
+  metallb_ip_ranges     = ["192.168.10.240-192.168.10.250"]
 
   proxmox_vm_id_start           = 300
   proxmox_default_vm_datastore  = "local-lvm"
@@ -110,6 +114,12 @@ module "talos" {
 - Talos machine configuration sets `machine.install.image` to `factory.talos.dev/installer/<talos_schematic_id>:v<talos_version>` so installed nodes keep the same secure-boot-capable schematic.
 - VM provisioning order is enforced as: masters/control-plane first, then `storage_workers`, and finally `workers`.
 - A final Talos cluster health check (`talos_cluster_health`) runs after all machine configurations are applied.
+- MetalLB installation follows the official workflow: chart installation plus explicit `IPAddressPool` and `L2Advertisement` resources.
+- MetalLB Helm chart version is pinned in this module to `0.15.3`.
+- To avoid CRD discovery issues during plan, the custom resources are applied via a second Helm release after MetalLB CRDs exist.
+- Namespace labels applied: `pod-security.kubernetes.io/enforce=privileged`, `pod-security.kubernetes.io/audit=privileged`, `pod-security.kubernetes.io/warn=privileged`.
+- `enable_metallb` defaults to `true`; set it to `false` to skip MetalLB installation.
+- When `enable_metallb = true`, `metallb_ip_ranges` is required and accepts IPv4 CIDR/range entries (for example `192.168.1.0/28` or `192.168.1.240-192.168.1.250`).
 - Set `wait_for_control_plane_health = false` for destroy operations to skip final health checks (for example: `terraform destroy -var='wait_for_control_plane_health=false'`).
 - The default cluster endpoint is `https://<first-master-ip>:6443`; you can override it with `cluster_endpoint`.
 - Talos machine config apply now waits for VM creation resources to avoid race conditions during first apply.
@@ -127,7 +137,8 @@ The sections below (`Requirements`, `Providers`, `Resources`, `Inputs`, `Outputs
 
 | Name | Version |
 |------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.5.0 |
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.10.0 |
+| <a name="requirement_helm"></a> [helm](#requirement\_helm) | >= 2.14.0, < 3.0.0 |
 | <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | >= 0.75.0, < 1.0.0 |
 | <a name="requirement_talos"></a> [talos](#requirement\_talos) | >= 0.7.0, < 1.0.0 |
 
@@ -135,7 +146,8 @@ The sections below (`Requirements`, `Providers`, `Resources`, `Inputs`, `Outputs
 
 | Name | Version |
 |------|---------|
-| <a name="provider_proxmox"></a> [proxmox](#provider\_proxmox) | 0.99.0 |
+| <a name="provider_helm"></a> [helm](#provider\_helm) | 2.17.0 |
+| <a name="provider_proxmox"></a> [proxmox](#provider\_proxmox) | 0.101.1 |
 | <a name="provider_talos"></a> [talos](#provider\_talos) | 0.10.1 |
 | <a name="provider_terraform"></a> [terraform](#provider\_terraform) | n/a |
 
@@ -147,6 +159,9 @@ No modules.
 
 | Name | Type |
 |------|------|
+| [helm_release.metallb](https://registry.terraform.io/providers/hashicorp/helm/latest/docs/resources/release) | resource |
+| [helm_release.metallb_config](https://registry.terraform.io/providers/hashicorp/helm/latest/docs/resources/release) | resource |
+| [helm_release.metallb_namespace](https://registry.terraform.io/providers/hashicorp/helm/latest/docs/resources/release) | resource |
 | [proxmox_virtual_environment_download_file.talos_image](https://registry.terraform.io/providers/bpg/proxmox/latest/docs/resources/virtual_environment_download_file) | resource |
 | [proxmox_virtual_environment_vm.master](https://registry.terraform.io/providers/bpg/proxmox/latest/docs/resources/virtual_environment_vm) | resource |
 | [proxmox_virtual_environment_vm.storage_worker](https://registry.terraform.io/providers/bpg/proxmox/latest/docs/resources/virtual_environment_vm) | resource |
@@ -171,9 +186,15 @@ No modules.
 | <a name="input_control_plane_machine_config_patches"></a> [control\_plane\_machine\_config\_patches](#input\_control\_plane\_machine\_config\_patches) | Additional YAML patches applied to all control-plane nodes | `list(string)` | `[]` | no |
 | <a name="input_default_install_disk"></a> [default\_install\_disk](#input\_default\_install\_disk) | Default Talos installation disk used in machine config patches | `string` | `"/dev/sda"` | no |
 | <a name="input_default_talos_interface"></a> [default\_talos\_interface](#input\_default\_talos\_interface) | Default Talos network interface used for static network patches | `string` | `"eth0"` | no |
+| <a name="input_enable_metallb"></a> [enable\_metallb](#input\_enable\_metallb) | Whether to install and configure MetalLB | `bool` | `true` | no |
 | <a name="input_kubernetes_version"></a> [kubernetes\_version](#input\_kubernetes\_version) | Optional Kubernetes version for generated Talos machine configuration | `string` | `null` | no |
 | <a name="input_master_default_disk_gb"></a> [master\_default\_disk\_gb](#input\_master\_default\_disk\_gb) | Default disk size (GB) for masters when a node does not define disk\_gb | `number` | `32` | no |
 | <a name="input_masters"></a> [masters](#input\_masters) | Master nodes definition | <pre>list(object({<br/>    host         = string<br/>    proxmox_node = string<br/><br/>    ip_mode = optional(string, "dhcp")<br/>    ip      = optional(string)<br/>    cidr    = optional(number)<br/>    gateway = optional(string)<br/><br/>    ram_mb    = number<br/>    cpu_cores = number<br/>    cpu_type  = optional(string)<br/><br/>    disk_gb      = optional(number)<br/>    datastore_id = optional(string)<br/>    pool_id      = optional(string)<br/>    bridge       = optional(string)<br/>    vlan_id      = optional(number)<br/>    mac_address  = optional(string)<br/><br/>    install_disk           = optional(string)<br/>    machine_config_patches = optional(list(string), [])<br/>  }))</pre> | n/a | yes |
+| <a name="input_metallb_ip_ranges"></a> [metallb\_ip\_ranges](#input\_metallb\_ip\_ranges) | MetalLB load balancer address ranges (CIDR or start-end range), for example ["192.168.1.240-192.168.1.250"] | `list(string)` | `[]` | no |
+| <a name="input_metallb_ipaddresspool_name"></a> [metallb\_ipaddresspool\_name](#input\_metallb\_ipaddresspool\_name) | Name of the MetalLB IPAddressPool resource | `string` | `"default-pool"` | no |
+| <a name="input_metallb_l2advertisement_name"></a> [metallb\_l2advertisement\_name](#input\_metallb\_l2advertisement\_name) | Name of the MetalLB L2Advertisement resource | `string` | `"default-l2advertisement"` | no |
+| <a name="input_metallb_namespace"></a> [metallb\_namespace](#input\_metallb\_namespace) | Kubernetes namespace for MetalLB | `string` | `"metallb-system"` | no |
+| <a name="input_metallb_release_name"></a> [metallb\_release\_name](#input\_metallb\_release\_name) | Helm release name for MetalLB | `string` | `"metallb"` | no |
 | <a name="input_proxmox_default_bridge"></a> [proxmox\_default\_bridge](#input\_proxmox\_default\_bridge) | Default Proxmox network bridge when a node does not define bridge | `string` | `"vmbr0"` | no |
 | <a name="input_proxmox_default_cpu_type"></a> [proxmox\_default\_cpu\_type](#input\_proxmox\_default\_cpu\_type) | Default Proxmox emulated CPU type when a node does not define cpu\_type | `string` | `"x86-64-v2-AES"` | no |
 | <a name="input_proxmox_default_pool_id"></a> [proxmox\_default\_pool\_id](#input\_proxmox\_default\_pool\_id) | Default Proxmox pool ID when a node does not define pool\_id | `string` | `null` | no |
@@ -206,6 +227,9 @@ No modules.
 | <a name="output_control_plane_ips"></a> [control\_plane\_ips](#output\_control\_plane\_ips) | Ordered list of control-plane IPs |
 | <a name="output_kubeconfig"></a> [kubeconfig](#output\_kubeconfig) | Kubernetes kubeconfig |
 | <a name="output_master_ips"></a> [master\_ips](#output\_master\_ips) | Map of master hostname to resolved IP |
+| <a name="output_metallb_enabled"></a> [metallb\_enabled](#output\_metallb\_enabled) | Whether MetalLB is enabled |
+| <a name="output_metallb_ip_ranges"></a> [metallb\_ip\_ranges](#output\_metallb\_ip\_ranges) | Configured MetalLB IP ranges |
+| <a name="output_metallb_namespace"></a> [metallb\_namespace](#output\_metallb\_namespace) | Namespace where MetalLB is installed |
 | <a name="output_node_inventory"></a> [node\_inventory](#output\_node\_inventory) | Node inventory with role, proxmox host, and resolved IP |
 | <a name="output_storage_worker_ips"></a> [storage\_worker\_ips](#output\_storage\_worker\_ips) | Map of storage worker hostname to resolved IP |
 | <a name="output_talosconfig"></a> [talosconfig](#output\_talosconfig) | Talos client configuration |
