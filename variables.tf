@@ -189,11 +189,28 @@ variable "metallb_ip_ranges" {
 
   validation {
     condition = var.enable_metallb ? alltrue([
-      for entry in var.metallb_ip_ranges : can(regex(
-        "^((([0-9]{1,3}\\.){3}[0-9]{1,3}-([0-9]{1,3}\\.){3}[0-9]{1,3})|(([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}))$",
-      trimspace(entry)))
+      for entry in var.metallb_ip_ranges : (
+        can(cidrnetmask(trimspace(entry))) || (
+          can(regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}-([0-9]{1,3}\\.){3}[0-9]{1,3}$", trimspace(entry))) &&
+          can(cidrhost("${split("-", trimspace(entry))[0]}/32", 0)) &&
+          can(cidrhost("${split("-", trimspace(entry))[1]}/32", 0)) &&
+          (
+            (
+              tonumber(split(".", split("-", trimspace(entry))[0])[0]) * 16777216 +
+              tonumber(split(".", split("-", trimspace(entry))[0])[1]) * 65536 +
+              tonumber(split(".", split("-", trimspace(entry))[0])[2]) * 256 +
+              tonumber(split(".", split("-", trimspace(entry))[0])[3])
+              ) <= (
+              tonumber(split(".", split("-", trimspace(entry))[1])[0]) * 16777216 +
+              tonumber(split(".", split("-", trimspace(entry))[1])[1]) * 65536 +
+              tonumber(split(".", split("-", trimspace(entry))[1])[2]) * 256 +
+              tonumber(split(".", split("-", trimspace(entry))[1])[3])
+            )
+          )
+        )
+      )
     ]) : true
-    error_message = "When enable_metallb is true, each metallb_ip_ranges entry must be an IPv4 CIDR (for example 192.168.1.0/28) or range (for example 192.168.1.240-192.168.1.250)."
+    error_message = "When enable_metallb is true, each metallb_ip_ranges entry must be a valid IPv4 CIDR (0-32 prefix) or a valid IPv4 range with start <= end."
   }
 }
 

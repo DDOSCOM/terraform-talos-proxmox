@@ -584,13 +584,6 @@ data "talos_machine_configuration" "worker" {
   kubernetes_version = var.kubernetes_version
 }
 
-provider "kubernetes" {
-  host                   = local.kubernetes_host
-  cluster_ca_certificate = local.kubernetes_cluster_ca_certificate
-  client_certificate     = local.kubernetes_client_certificate
-  client_key             = local.kubernetes_client_key
-}
-
 provider "helm" {
   kubernetes {
     host                   = local.kubernetes_host
@@ -708,11 +701,39 @@ data "talos_client_configuration" "this" {
   nodes                = local.all_node_ips
 }
 
+resource "helm_release" "metallb_namespace" {
+  count = var.enable_metallb ? 1 : 0
+
+  depends_on = [
+    talos_cluster_kubeconfig.this,
+    talos_machine_configuration_apply.master,
+    talos_machine_configuration_apply.worker,
+    talos_machine_configuration_apply.storage_worker,
+    data.talos_cluster_health.control_plane_ready,
+  ]
+
+  name             = "${var.metallb_release_name}-namespace"
+  chart            = "${path.module}/charts/metallb-namespace"
+  namespace        = "default"
+  create_namespace = false
+  wait             = true
+  timeout          = 300
+
+  values = [yamlencode({
+    namespace = var.metallb_namespace
+    labels = {
+      "pod-security.kubernetes.io/enforce" = "privileged"
+      "pod-security.kubernetes.io/audit"   = "privileged"
+      "pod-security.kubernetes.io/warn"    = "privileged"
+    }
+  })]
+}
+
 resource "helm_release" "metallb" {
   count = var.enable_metallb ? 1 : 0
 
   depends_on = [
-    kubernetes_manifest.metallb_namespace,
+    helm_release.metallb_namespace,
     talos_cluster_kubeconfig.this,
     talos_machine_configuration_apply.master,
     talos_machine_configuration_apply.worker,
@@ -728,25 +749,6 @@ resource "helm_release" "metallb" {
   version          = "0.15.3"
   wait             = true
   timeout          = 600
-}
-
-resource "kubernetes_manifest" "metallb_namespace" {
-  count = var.enable_metallb ? 1 : 0
-
-  depends_on = [talos_cluster_kubeconfig.this]
-
-  manifest = {
-    apiVersion = "v1"
-    kind       = "Namespace"
-    metadata = {
-      name = var.metallb_namespace
-      labels = {
-        "pod-security.kubernetes.io/enforce" = "privileged"
-        "pod-security.kubernetes.io/audit"   = "privileged"
-        "pod-security.kubernetes.io/warn"    = "privileged"
-      }
-    }
-  }
 }
 
 resource "helm_release" "metallb_config" {

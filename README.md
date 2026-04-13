@@ -137,9 +137,8 @@ The sections below (`Requirements`, `Providers`, `Resources`, `Inputs`, `Outputs
 
 | Name | Version |
 |------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.5.0 |
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.10.0 |
 | <a name="requirement_helm"></a> [helm](#requirement\_helm) | >= 2.14.0, < 3.0.0 |
-| <a name="requirement_kubernetes"></a> [kubernetes](#requirement\_kubernetes) | >= 2.31.0, < 3.0.0 |
 | <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | >= 0.75.0, < 1.0.0 |
 | <a name="requirement_talos"></a> [talos](#requirement\_talos) | >= 0.7.0, < 1.0.0 |
 
@@ -148,7 +147,6 @@ The sections below (`Requirements`, `Providers`, `Resources`, `Inputs`, `Outputs
 | Name | Version |
 |------|---------|
 | <a name="provider_helm"></a> [helm](#provider\_helm) | 2.17.0 |
-| <a name="provider_kubernetes"></a> [kubernetes](#provider\_kubernetes) | 2.38.0 |
 | <a name="provider_proxmox"></a> [proxmox](#provider\_proxmox) | 0.101.1 |
 | <a name="provider_talos"></a> [talos](#provider\_talos) | 0.10.1 |
 | <a name="provider_terraform"></a> [terraform](#provider\_terraform) | n/a |
@@ -163,7 +161,7 @@ No modules.
 |------|------|
 | [helm_release.metallb](https://registry.terraform.io/providers/hashicorp/helm/latest/docs/resources/release) | resource |
 | [helm_release.metallb_config](https://registry.terraform.io/providers/hashicorp/helm/latest/docs/resources/release) | resource |
-| [kubernetes_manifest.metallb_namespace](https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/manifest) | resource |
+| [helm_release.metallb_namespace](https://registry.terraform.io/providers/hashicorp/helm/latest/docs/resources/release) | resource |
 | [proxmox_virtual_environment_download_file.talos_image](https://registry.terraform.io/providers/bpg/proxmox/latest/docs/resources/virtual_environment_download_file) | resource |
 | [proxmox_virtual_environment_vm.master](https://registry.terraform.io/providers/bpg/proxmox/latest/docs/resources/virtual_environment_vm) | resource |
 | [proxmox_virtual_environment_vm.storage_worker](https://registry.terraform.io/providers/bpg/proxmox/latest/docs/resources/virtual_environment_vm) | resource |
