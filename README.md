@@ -10,7 +10,7 @@ This module provisions a Kubernetes cluster with Talos Linux on Proxmox.
 - Configures first-boot networking via cloud-init (`dhcp` or static IP per node).
 - Generates and applies Talos machine config, bootstraps the first master, and retrieves `kubeconfig`.
 - Installs MetalLB via Helm and applies `IPAddressPool` + `L2Advertisement` through a dedicated Helm config release.
-- Ensures `metallb-system` namespace (or custom `metallb_namespace`) has Pod Security labels set to `privileged` for `enforce`, `audit`, and `warn`.
+- Ensures `metallb-system` namespace (or custom `metallb_namespace`) has Pod Security labels and annotations set to `privileged` for `enforce`, `audit`, and `warn`.
 - Assigns deterministic `vm_id` values starting from `proxmox_vm_id_start` (default `100`).
 - VM ID allocation order is `masters`, then `storage_workers`, then `workers`.
 
@@ -21,7 +21,8 @@ module "talos" {
   source = "./modules/talos-proxmox"
 
   talos_cluster_name = "prod-cluster"
-  talos_version      = "1.12.6"
+  # Recommended latest stable Talos release, verified on 2026-06-14.
+  talos_version      = "1.13.4"
   talos_schematic_id = "ce4c980550dd2ab1b17bbf2b08801c7eb59418eafe8f279833297925d67c7515"
   enable_metallb        = true
   metallb_ip_ranges     = ["192.168.10.240-192.168.10.250"]
@@ -96,7 +97,9 @@ module "talos" {
 ## Important notes
 
 - `talos_version` is required and is used for both image download and machine config generation.
-- `talos_version` accepts both `1.12.6` and `v1.12.6` (the module normalizes it internally).
+- Recommended Talos version: `1.13.4` (`v1.13.4` is the latest stable release verified from Sidero Labs on 2026-06-14).
+- `talos_version` accepts both `1.13.4` and `v1.13.4` (the module normalizes it internally).
+- Leave `kubernetes_version = null` to use Talos' default Kubernetes version for the selected Talos release. Talos `v1.13.4` defaults to Kubernetes `v1.36.1`; set `kubernetes_version` only when you intentionally want to pin a compatible Kubernetes version.
 - `talos_schematic_id` must be a 64-character lowercase hexadecimal string.
 - Use a schematic generated with secure boot enabled (for example, `secureboot=true`, `bootloader=sd-boot`, and `siderolabs/qemu-guest-agent`).
 - If set, `cluster_endpoint` must use `https://`.
@@ -110,6 +113,7 @@ module "talos" {
 - If a `storage_workers[*]` node uses iSCSI datastore, `scsi1` attaches the specified LUN (with independent `iscsi_disk_gb`) while `scsi0` remains the Talos system disk.
 - If a `storage_workers[*]` node uses a datastore not listed in `proxmox_iscsi_datastores`, only `scsi0` is created.
 - `storage_worker_default_system_disk_gb` defines the default size of `storage_workers[*].scsi0` for non-iSCSI nodes; `storage_workers[*].disk_gb` overrides it per node.
+- Storage workers are registered with label `node-role.kubernetes.io/storage=true` and taint `node-role.kubernetes.io/storage:PreferNoSchedule`.
 - The module downloads `nocloud-${talos_arch}.raw.zst`, decompresses it in Proxmox, and imports disks as `raw` for all VM roles.
 - Talos machine configuration sets `machine.install.image` to `factory.talos.dev/installer/<talos_schematic_id>:v<talos_version>` so installed nodes keep the same secure-boot-capable schematic.
 - VM provisioning order is enforced as: masters/control-plane first, then `storage_workers`, and finally `workers`.
@@ -139,7 +143,7 @@ The sections below (`Requirements`, `Providers`, `Resources`, `Inputs`, `Outputs
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.10.0 |
 | <a name="requirement_helm"></a> [helm](#requirement\_helm) | >= 2.14.0, < 3.0.0 |
-| <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | >= 0.75.0, < 1.0.0 |
+| <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | >= 0.100.0, < 1.0.0 |
 | <a name="requirement_talos"></a> [talos](#requirement\_talos) | >= 0.7.0, < 1.0.0 |
 
 ## Providers
