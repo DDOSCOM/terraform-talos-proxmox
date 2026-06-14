@@ -113,7 +113,7 @@ module "talos" {
 - If a `storage_workers[*]` node uses iSCSI datastore, `scsi1` attaches the specified LUN (with independent `iscsi_disk_gb`) while `scsi0` remains the Talos system disk.
 - If a `storage_workers[*]` node uses a datastore not listed in `proxmox_iscsi_datastores`, only `scsi0` is created.
 - `storage_worker_default_system_disk_gb` defines the default size of `storage_workers[*].scsi0` for non-iSCSI nodes; `storage_workers[*].disk_gb` overrides it per node.
-- Storage workers are registered with label `node-role.kubernetes.io/storage=true` and taint `node-role.kubernetes.io/storage:PreferNoSchedule`.
+- Storage workers receive their storage metadata from Talos machine config: label `node-role.kubernetes.io/storage=true` via `machine.nodeLabels` and initial taint `node-role.kubernetes.io/storage=:PreferNoSchedule` via `machine.kubelet.extraConfig.registerWithTaints`.
 - The module downloads `nocloud-${talos_arch}.raw.zst`, decompresses it in Proxmox, and imports disks as `raw` for all VM roles.
 - Talos machine configuration sets `machine.install.image` to `factory.talos.dev/installer/<talos_schematic_id>:v<talos_version>` so installed nodes keep the same secure-boot-capable schematic.
 - VM provisioning order is enforced as: masters/control-plane first, then `storage_workers`, and finally `workers`.

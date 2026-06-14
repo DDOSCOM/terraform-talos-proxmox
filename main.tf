@@ -529,8 +529,16 @@ locals {
             nodeLabels = {
               "node-role.kubernetes.io/storage" = "true"
             }
-            nodeTaints = {
-              "node-role.kubernetes.io/storage" = "PreferNoSchedule"
+            kubelet = {
+              extraConfig = {
+                registerWithTaints = [
+                  {
+                    key    = "node-role.kubernetes.io/storage"
+                    value  = ""
+                    effect = "PreferNoSchedule"
+                  }
+                ]
+              }
             }
           }
         })
