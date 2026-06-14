@@ -526,6 +526,14 @@ locals {
               disk  = coalesce(try(node.install_disk, null), var.default_install_disk)
               image = local.talos_installer_image
             }
+            kubelet = {
+              nodeLabels = {
+                "node-role.kubernetes.io/storage" = "true"
+              }
+              nodeTaints = {
+                "node-role.kubernetes.io/storage" = "PreferNoSchedule"
+              }
+            }
           }
         })
       ],

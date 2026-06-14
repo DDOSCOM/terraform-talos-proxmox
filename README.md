@@ -110,6 +110,7 @@ module "talos" {
 - If a `storage_workers[*]` node uses iSCSI datastore, `scsi1` attaches the specified LUN (with independent `iscsi_disk_gb`) while `scsi0` remains the Talos system disk.
 - If a `storage_workers[*]` node uses a datastore not listed in `proxmox_iscsi_datastores`, only `scsi0` is created.
 - `storage_worker_default_system_disk_gb` defines the default size of `storage_workers[*].scsi0` for non-iSCSI nodes; `storage_workers[*].disk_gb` overrides it per node.
+- Storage workers are registered with label `node-role.kubernetes.io/storage=true` and taint `node-role.kubernetes.io/storage:PreferNoSchedule`.
 - The module downloads `nocloud-${talos_arch}.raw.zst`, decompresses it in Proxmox, and imports disks as `raw` for all VM roles.
 - Talos machine configuration sets `machine.install.image` to `factory.talos.dev/installer/<talos_schematic_id>:v<talos_version>` so installed nodes keep the same secure-boot-capable schematic.
 - VM provisioning order is enforced as: masters/control-plane first, then `storage_workers`, and finally `workers`.
@@ -139,7 +140,7 @@ The sections below (`Requirements`, `Providers`, `Resources`, `Inputs`, `Outputs
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.10.0 |
 | <a name="requirement_helm"></a> [helm](#requirement\_helm) | >= 2.14.0, < 3.0.0 |
-| <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | >= 0.75.0, < 1.0.0 |
+| <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | >= 0.100.0, < 1.0.0 |
 | <a name="requirement_talos"></a> [talos](#requirement\_talos) | >= 0.7.0, < 1.0.0 |
 
 ## Providers
