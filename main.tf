@@ -69,7 +69,7 @@ resource "terraform_data" "input_validation" {
     precondition {
       condition = alltrue([
         for host, node in local.storage_workers_by_host :
-        !local.storage_worker_uses_iscsi[host] || (try(node.iscsi_disk_gb, null) != null && try(node.iscsi_disk_gb, 0) > 0)
+        !local.storage_worker_uses_iscsi[host] || (try(node.iscsi_disk_gb, null) == null ? false : node.iscsi_disk_gb > 0)
       ])
       error_message = "For iSCSI storage_workers, iscsi_disk_gb is required and must be greater than 0 (match the existing LUN size)."
     }
@@ -108,7 +108,12 @@ resource "terraform_data" "input_validation" {
   }
 }
 
-resource "proxmox_virtual_environment_download_file" "talos_image" {
+moved {
+  from = proxmox_virtual_environment_download_file.talos_image
+  to   = proxmox_download_file.talos_image
+}
+
+resource "proxmox_download_file" "talos_image" {
   for_each = toset(local.proxmox_nodes_with_talos_image)
 
   depends_on = [terraform_data.input_validation]
@@ -154,7 +159,7 @@ resource "proxmox_virtual_environment_vm" "master" {
 
   disk {
     datastore_id = coalesce(try(each.value.datastore_id, null), var.proxmox_default_vm_datastore)
-    file_id      = proxmox_virtual_environment_download_file.talos_image[each.value.proxmox_node].id
+    file_id      = proxmox_download_file.talos_image[each.value.proxmox_node].id
     file_format  = "raw"
     interface    = "scsi0"
     discard      = "on"
@@ -224,7 +229,7 @@ resource "proxmox_virtual_environment_vm" "worker" {
 
   disk {
     datastore_id = coalesce(try(each.value.datastore_id, null), var.proxmox_default_vm_datastore)
-    file_id      = proxmox_virtual_environment_download_file.talos_image[each.value.proxmox_node].id
+    file_id      = proxmox_download_file.talos_image[each.value.proxmox_node].id
     file_format  = "raw"
     interface    = "scsi0"
     discard      = "on"
@@ -293,7 +298,7 @@ resource "proxmox_virtual_environment_vm" "storage_worker" {
 
   disk {
     datastore_id = local.storage_worker_effective_system_datastore[each.key]
-    file_id      = proxmox_virtual_environment_download_file.talos_image[each.value.proxmox_node].id
+    file_id      = proxmox_download_file.talos_image[each.value.proxmox_node].id
     file_format  = "raw"
     interface    = "scsi0"
     discard      = "on"
@@ -721,6 +726,11 @@ resource "helm_release" "metallb_namespace" {
 
   values = [yamlencode({
     namespace = var.metallb_namespace
+    annotations = {
+      "pod-security.kubernetes.io/enforce" = "privileged"
+      "pod-security.kubernetes.io/audit"   = "privileged"
+      "pod-security.kubernetes.io/warn"    = "privileged"
+    }
     labels = {
       "pod-security.kubernetes.io/enforce" = "privileged"
       "pod-security.kubernetes.io/audit"   = "privileged"
