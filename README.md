@@ -117,7 +117,7 @@ module "talos" {
 - MetalLB installation follows the official workflow: chart installation plus explicit `IPAddressPool` and `L2Advertisement` resources.
 - MetalLB Helm chart version is pinned in this module to `0.15.3`.
 - To avoid CRD discovery issues during plan, the custom resources are applied via a second Helm release after MetalLB CRDs exist.
-- Namespace labels applied: `pod-security.kubernetes.io/enforce=privileged`, `pod-security.kubernetes.io/audit=privileged`, `pod-security.kubernetes.io/warn=privileged`.
+- Namespace labels and annotations applied: `pod-security.kubernetes.io/enforce=privileged`, `pod-security.kubernetes.io/audit=privileged`, `pod-security.kubernetes.io/warn=privileged`.
 - `enable_metallb` defaults to `true`; set it to `false` to skip MetalLB installation.
 - When `enable_metallb = true`, `metallb_ip_ranges` is required and accepts IPv4 CIDR/range entries (for example `192.168.1.0/28` or `192.168.1.240-192.168.1.250`).
 - Set `wait_for_control_plane_health = false` for destroy operations to skip final health checks (for example: `terraform destroy -var='wait_for_control_plane_health=false'`).
@@ -162,7 +162,7 @@ No modules.
 | [helm_release.metallb](https://registry.terraform.io/providers/hashicorp/helm/latest/docs/resources/release) | resource |
 | [helm_release.metallb_config](https://registry.terraform.io/providers/hashicorp/helm/latest/docs/resources/release) | resource |
 | [helm_release.metallb_namespace](https://registry.terraform.io/providers/hashicorp/helm/latest/docs/resources/release) | resource |
-| [proxmox_virtual_environment_download_file.talos_image](https://registry.terraform.io/providers/bpg/proxmox/latest/docs/resources/virtual_environment_download_file) | resource |
+| [proxmox_download_file.talos_image](https://registry.terraform.io/providers/bpg/proxmox/latest/docs/resources/download_file) | resource |
 | [proxmox_virtual_environment_vm.master](https://registry.terraform.io/providers/bpg/proxmox/latest/docs/resources/virtual_environment_vm) | resource |
 | [proxmox_virtual_environment_vm.storage_worker](https://registry.terraform.io/providers/bpg/proxmox/latest/docs/resources/virtual_environment_vm) | resource |
 | [proxmox_virtual_environment_vm.worker](https://registry.terraform.io/providers/bpg/proxmox/latest/docs/resources/virtual_environment_vm) | resource |

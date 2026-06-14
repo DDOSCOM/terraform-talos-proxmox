@@ -402,7 +402,7 @@ variable "storage_workers" {
   validation {
     condition = alltrue([
       for node in var.storage_workers :
-      try(node.iscsi_disk_gb, null) == null || try(node.iscsi_disk_gb, 0) > 0
+      try(node.iscsi_disk_gb, null) == null ? true : node.iscsi_disk_gb > 0
     ])
     error_message = "If set, storage_workers[*].iscsi_disk_gb must be greater than 0."
   }
