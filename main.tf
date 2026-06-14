@@ -527,14 +527,14 @@ locals {
               image = local.talos_installer_image
             }
             nodeLabels = {
-              "node-role.kubernetes.io/storage" = "true"
+              "node.kubernetes.io/assignment" = "storage"
             }
             kubelet = {
               extraConfig = {
                 registerWithTaints = [
                   {
-                    key    = "node-role.kubernetes.io/storage"
-                    value  = ""
+                    key    = "node.kubernetes.io/assignment"
+                    value  = "storage"
                     effect = "PreferNoSchedule"
                   }
                 ]
